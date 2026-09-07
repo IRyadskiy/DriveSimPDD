@@ -17,6 +17,7 @@ var handbrake_on := true
 var left_signal := false
 var right_signal := false
 var hazards_on := false
+var gear := "P"
 var speed := 0.0
 var steering := 0.0
 var start_transform := Transform3D.IDENTITY
@@ -25,6 +26,7 @@ var blink_visible := false
 var front_lights: Array[MeshInstance3D] = []
 var left_lights: Array[MeshInstance3D] = []
 var right_lights: Array[MeshInstance3D] = []
+var steering_wheel: MeshInstance3D
 
 func _ready() -> void:
 	start_transform = global_transform
@@ -37,7 +39,10 @@ func _physics_process(delta: float) -> void:
 
 func _handle_switches() -> void:
 	if Input.is_action_just_pressed("toggle_engine"):
-		engine_on = not engine_on; state_changed.emit()
+		if engine_on:
+			engine_on = false; state_changed.emit()
+		elif gear == "P" or gear == "N":
+			engine_on = true; state_changed.emit()
 	if Input.is_action_just_pressed("toggle_belt"):
 		seat_belt_on = not seat_belt_on; state_changed.emit()
 	if Input.is_action_just_pressed("toggle_drl"):
@@ -50,18 +55,28 @@ func _handle_switches() -> void:
 		right_signal = not right_signal; left_signal = false; hazards_on = false; state_changed.emit()
 	if Input.is_action_just_pressed("hazard"):
 		hazards_on = not hazards_on; left_signal = false; right_signal = false; state_changed.emit()
+	if Input.is_action_just_pressed("gear_p") and abs(speed) < 0.3:
+		gear = "P"; state_changed.emit()
+	if Input.is_action_just_pressed("gear_r") and abs(speed) < 0.3:
+		gear = "R"; state_changed.emit()
+	if Input.is_action_just_pressed("gear_n"):
+		gear = "N"; state_changed.emit()
+	if Input.is_action_just_pressed("gear_d") and abs(speed) < 0.3:
+		gear = "D"; state_changed.emit()
 	if Input.is_action_just_pressed("reset_car"):
 		global_transform = start_transform; speed = 0.0; velocity = Vector3.ZERO
 
 func _drive(delta: float) -> void:
 	var throttle := Input.get_axis("brake_reverse", "accelerate")
 	steering = move_toward(steering, Input.get_axis("steer_right", "steer_left"), delta * 3.0)
-	if not engine_on or handbrake_on:
+	if not engine_on or handbrake_on or gear == "P" or gear == "N":
 		speed = move_toward(speed, 0.0, delta * 8.0)
-	elif throttle > 0.0:
+	elif gear == "D" and throttle > 0.0:
 		speed = move_toward(speed, MAX_SPEED * throttle, delta * 4.2)
+	elif gear == "R" and throttle > 0.0:
+		speed = move_toward(speed, -5.0 * throttle, delta * 3.0)
 	elif throttle < 0.0:
-		speed = move_toward(speed, -5.0, delta * (8.0 if speed > 0.5 else 3.0))
+		speed = move_toward(speed, 0.0, delta * 9.0)
 	else:
 		speed = move_toward(speed, 0.0, delta * 1.25)
 	if abs(speed) > 0.08:
@@ -69,6 +84,8 @@ func _drive(delta: float) -> void:
 	velocity = -global_transform.basis.z * speed
 	velocity.y = -0.5
 	move_and_slide()
+	if steering_wheel:
+		steering_wheel.rotation_degrees.z = -steering * 105.0
 	speed_changed.emit(abs(speed) * 3.6)
 
 func _update_lights(delta: float) -> void:
@@ -89,6 +106,7 @@ func _build_car() -> void:
 	_add_box(Vector3(1.42, 0.12, 1.65), Vector3(0, 1.45, 0.10), body_mat)
 	_add_box(Vector3(1.62, 0.14, 1.05), Vector3(0, 0.96, -1.55), body_mat)
 	_add_box(Vector3(1.58, 0.16, 0.72), Vector3(0, 0.96, 1.74), body_mat)
+	_build_cockpit(body_mat)
 	for x in [-0.82, 0.82]:
 		for z in [-WHEEL_BASE * 0.5, WHEEL_BASE * 0.5]: _add_wheel(Vector3(x, 0.42, z))
 	for x in [-0.57, 0.57]: front_lights.append(_add_box(Vector3(0.38, 0.12, 0.05), Vector3(x, 0.75, -2.225), lamp_mat))
@@ -97,6 +115,27 @@ func _build_car() -> void:
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new(); shape.size = Vector3(WIDTH, HEIGHT, LENGTH)
 	collision.shape = shape; collision.position.y = HEIGHT * 0.5; add_child(collision)
+
+func _build_cockpit(body_mat: Material) -> void:
+	var dark := _material(Color("171b20"), 0.02, 0.72)
+	var seat_mat := _material(Color("242a31"), 0.0, 0.92)
+	_add_box(Vector3(1.48, 0.22, 0.55), Vector3(0, 0.98, -0.68), dark)
+	_add_box(Vector3(0.52, 0.12, 0.62), Vector3(-0.39, 0.54, 0.33), seat_mat)
+	_add_box(Vector3(0.52, 0.12, 0.62), Vector3(0.39, 0.54, 0.33), seat_mat)
+	_add_box(Vector3(0.52, 0.72, 0.12), Vector3(-0.39, 0.88, 0.60), seat_mat)
+	_add_box(Vector3(0.52, 0.72, 0.12), Vector3(0.39, 0.88, 0.60), seat_mat)
+	var wheel_mesh := TorusMesh.new()
+	wheel_mesh.inner_radius = 0.18
+	wheel_mesh.outer_radius = 0.25
+	wheel_mesh.rings = 24
+	wheel_mesh.ring_segments = 12
+	wheel_mesh.material = dark
+	steering_wheel = MeshInstance3D.new()
+	steering_wheel.mesh = wheel_mesh
+	steering_wheel.position = Vector3(-0.40, 1.02, -0.58)
+	steering_wheel.rotation_degrees.x = 90.0
+	add_child(steering_wheel)
+	_add_box(Vector3(0.03, 0.03, 0.34), Vector3(-0.40, 1.02, -0.58), dark)
 
 func _add_box(size: Vector3, pos: Vector3, material: Material) -> MeshInstance3D:
 	var item := MeshInstance3D.new(); var mesh := BoxMesh.new()
@@ -116,4 +155,3 @@ func _material(color: Color, metallic: float, roughness: float) -> StandardMater
 func _emissive(color: Color) -> StandardMaterial3D:
 	var mat := _material(color, 0.0, 0.15); mat.emission_enabled = true; mat.emission = color; mat.emission_energy_multiplier = 4.0
 	return mat
-
