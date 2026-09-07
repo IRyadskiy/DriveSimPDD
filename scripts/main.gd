@@ -12,6 +12,9 @@ var speed_label: Label
 var gear_label: Label
 var left_arrow: Label
 var right_arrow: Label
+var sun: DirectionalLight3D
+var world_environment: WorldEnvironment
+var night_mode := false
 var tasks := ["Заведите двигатель — E", "Пристегните ремень — B", "Снимите ручник — Space", "Включите ДХО — L", "Переведите АКПП в D — клавиша 4", "Начните движение — W", "Покиньте учебную парковку"]
 var task_done := [false, false, false, false, false, false, false]
 
@@ -33,6 +36,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		look_pitch = -0.08
 	if event.is_action_pressed("toggle_camera"):
 		exterior_camera = not exterior_camera
+	if event.is_action_pressed("toggle_night"):
+		night_mode = not night_mode
+		sun.light_energy = 0.03 if night_mode else 1.0
+		world_environment.environment.ambient_light_energy = 0.06 if night_mode else 0.42
+		world_environment.environment.background_color = Color("07101f") if night_mode else Color("9ac6e8")
 	if event.is_action_pressed("ui_cancel"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if event is InputEventMouseButton and event.pressed:
@@ -50,10 +58,11 @@ func _process(_delta: float) -> void:
 
 func _build_world() -> void:
 	var world := WorldEnvironment.new(); var env := Environment.new()
+	world_environment = world
 	env.background_mode = Environment.BG_COLOR; env.background_color = Color("9ac6e8")
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; env.ambient_light_color = Color.WHITE; env.ambient_light_energy = 0.72
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; env.ambient_light_color = Color.WHITE; env.ambient_light_energy = 0.42
 	world.environment = env; add_child(world)
-	var sun := DirectionalLight3D.new(); sun.rotation_degrees = Vector3(-52, -28, 0); sun.shadow_enabled = true; add_child(sun)
+	sun = DirectionalLight3D.new(); sun.rotation_degrees = Vector3(-52, -28, 0); sun.shadow_enabled = true; add_child(sun)
 	_static_box(Vector3(28, 0.25, 32), Vector3(0, -0.15, 0), Color("30343a"))
 	_static_box(Vector3(12, 0.22, 90), Vector3(0, -0.14, -52), Color("282b30"))
 	_static_box(Vector3(34, 0.18, 120), Vector3(-23, -0.16, -38), Color("5d8b50"))
@@ -75,12 +84,13 @@ func _build_hud() -> void:
 	status_label.visible = false
 	speed_label.visible = false
 	gear_label.visible = false
-	_label(layer, Vector2(850, 681), 12, "1/2/3/4 — P/R/N/D  •  C — вид  •  мышь — обзор")
+	_label(layer, Vector2(800, 681), 12, "1/2/3/4 — P/R/N/D • C — вид • T — день/ночь")
 	left_arrow = _label(layer, Vector2(550, 601), 34, "◀")
 	right_arrow = _label(layer, Vector2(740, 601), 34, "▶")
 	left_arrow.visible = false
 	right_arrow.visible = false
-	_label(layer, Vector2(18, 681), 12, "E — двигатель • B — ремень • Space — ручник • L — ДХО • Z/X — поворотники • H — аварийка")
+	_label(layer, Vector2(18, 661), 12, "I — зажигание • E — двигатель • B — ремень • Space — ручник • Z/X — поворотники • H — аварийка")
+	_label(layer, Vector2(18, 681), 12, "L — выкл/ДХО/ближний • K — дальний • F/G — передние/задние ПТФ")
 	var model = car.get_node("Solaris2021Model")
 	for mount in model.mirrors:
 		_build_mirror_surface(mount)
