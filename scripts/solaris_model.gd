@@ -17,6 +17,7 @@ var arrow_left: Label3D
 var arrow_right: Label3D
 var selector: Node3D
 var mirrors: Array[Node3D] = []
+var telltales: Dictionary = {}
 
 func build(owner_car: CharacterBody3D) -> void:
 	car = owner_car
@@ -30,6 +31,9 @@ func build(owner_car: CharacterBody3D) -> void:
 	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	glass.cull_mode = BaseMaterial3D.CULL_DISABLED
 	build_body()
+	for side in [-1.0, 1.0]:
+		car.fog_meshes.append(box(Vector3(0.12,0.06,0.04), Vector3(side * 0.64,0.43,-2.25), white))
+	car.fog_meshes.append(box(Vector3(0.12,0.05,0.04), Vector3(-0.48,0.43,2.25), material(Color("f82628"),0,0.2)))
 	build_interior()
 	build_wheels()
 	build_mirrors()
@@ -41,7 +45,9 @@ func merge_static_surfaces() -> void:
 	for node in get_children():
 		if not node is MeshInstance3D:
 			continue
-		if node in car.front_lights or node in car.left_lights or node in car.right_lights or node in car.brake_lights or node in car.reverse_lights:
+		if node.has_meta("telltale"):
+			continue
+		if node in car.front_lights or node in car.left_lights or node in car.right_lights or node in car.brake_lights or node in car.reverse_lights or node in car.fog_meshes:
 			continue
 		var mat: Material = node.mesh.surface_get_material(0)
 		if mat == glass:
@@ -205,30 +211,121 @@ func curved_panel(z0: float, z1: float, w0: float, w1: float, y0: float, y1: flo
 	st.set_material(mat)
 	mesh_item(st.commit(), Vector3.ZERO)
 
+func rounded_panel(size: Vector2, radius: float, depth: float, pos: Vector3, mat: Material) -> void:
+	var points: Array[Vector2] = []
+	for corner in 4:
+		var cx: float = (size.x * 0.5 - radius) * (1.0 if corner in [0,3] else -1.0)
+		var cy: float = (size.y * 0.5 - radius) * (1.0 if corner in [0,1] else -1.0)
+		for step in 9:
+			var angle: float = (corner * 90.0 + step * 90.0 / 8.0) * PI / 180.0
+			points.append(Vector2(cx + cos(angle)*radius, cy + sin(angle)*radius))
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in points.size():
+		var a := Vector3(points[i].x,points[i].y,depth*0.5)
+		var p: Vector2 = points[(i+1)%points.size()]
+		var b := Vector3(p.x,p.y,depth*0.5)
+		var c: Vector3 = b - Vector3(0,0,depth)
+		var d: Vector3 = a - Vector3(0,0,depth)
+		for vertex in [Vector3(0,0,depth*0.5), b, a, a,b,c,a,c,d]:
+			st.add_vertex(vertex)
+	st.set_material(mat)
+	st.generate_normals()
+	mesh_item(st.commit(), pos)
+
+func build_dash_shell() -> void:
+	box(Vector3(1.40,0.47,0.05), Vector3(0,0.55,-0.83), leather)
+	box(Vector3(1.38,0.03,1.60), Vector3(0,0.34,0.04), leather)
+	# Closed cross-section avoids the overlapping flattened spheres of the prototype.
+	var profile: Array[Vector2] = [Vector2(-1.01,0.96), Vector2(-0.89,0.977), Vector2(-0.68,0.972), Vector2(-0.58,0.948), Vector2(-0.555,0.915), Vector2(-0.555,0.73), Vector2(-0.90,0.72)]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in 32:
+		for j in profile.size():
+			var k: int = (j + 1) % profile.size()
+			for index in [Vector2i(i,j), Vector2i(i+1,j), Vector2i(i+1,k), Vector2i(i,j), Vector2i(i+1,k), Vector2i(i,k)]:
+				var x: float = -0.73 + index.x * 1.46 / 32.0
+				var p: Vector2 = profile[index.y]
+				st.add_vertex(Vector3(x, p.y - 0.04 * pow(absf(x)/0.73, 4), p.x - 0.05 * pow(absf(x)/0.73, 4)))
+	st.set_material(leather)
+	st.generate_normals()
+	mesh_item(st.commit(), Vector3.ZERO)
+	# Flush glove-box panel, instead of exposed cross-bars.
+	box(Vector3(0.44,0.145,0.015), Vector3(0.43,0.795,-0.56), plastic)
+	box(Vector3(0.09,0.012,0.014), Vector3(0.43,0.83,-0.549), black)
+
+func build_telltales() -> void:
+	var keys: Array[String] = ["drl","low","high","fog","rear_fog","brake","belt","oil","battery","check","abs","airbag","eps","esp","fuel","temp"]
+	var amber := Color("ffc247")
+	var red := Color("ff4545")
+	for i in keys.size():
+		var key: String = keys[i]
+		var color: Color = amber
+		if key in ["brake","belt","oil","battery","airbag","temp"]: color = red
+		if key in ["drl","low","fog"]: color = Color("4be587")
+		if key == "high": color = Color("4d99ff")
+		var pos := Vector3(-0.565 + (i % 8) * 0.054, 0.938 - (i / 8) * 0.027, -0.516)
+		var glyph: String = icon_path(key)
+		if glyph.is_empty():
+			var text_icon := label(key.to_upper(), pos, 19, 0.00065, color)
+			telltales[key] = text_icon
+		else:
+			var svg: String = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48" viewBox="0 0 64 48"><g fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' + glyph + '</g></svg>'
+			var img := Image.new()
+			img.load_svg_from_string(svg)
+			var mat := StandardMaterial3D.new()
+			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mat.albedo_texture = ImageTexture.create_from_image(img)
+			mat.albedo_color = color
+			var mesh := QuadMesh.new()
+			mesh.size = Vector2(0.029, 0.022)
+			mesh.material = mat
+			var item := mesh_item(mesh, pos)
+			item.set_meta("telltale", true)
+			telltales[key] = item
+
+func icon_path(key: String) -> String:
+	match key:
+		"low", "high", "fog", "rear_fog":
+			var beams: String = '<path d="M9 12 H25 M9 24 H25 M9 36 H25"/>' if key == "high" else '<path d="M8 19 L25 11 M8 31 L25 23 M8 43 L25 35"/>'
+			if key in ["fog","rear_fog"]: beams += '<path d="M17 8 Q10 15 17 22 T17 39"/>'
+			return '<path d="M32 8 Q60 8 60 24 Q60 40 32 40 Z"/>' + beams
+		"battery": return '<path d="M7 13 H57 V40 H7 Z M16 13 V8 H25 V13 M40 13 V8 H49 V13 M14 24 H26 M20 18 V30 M39 24 H50"/>'
+		"oil": return '<path d="M10 17 H39 L45 25 L55 21 L44 38 H18 L10 27 Z M23 17 V11 H34 M7 18 H3 V28 H10 M55 33 Q64 43 55 44 Q49 42 55 33"/>'
+		"brake": return '<circle cx="32" cy="24" r="15"/><path d="M10 7 Q0 24 10 41 M54 7 Q64 24 54 41 M32 14 V27 M32 33 V34"/>'
+		"belt": return '<circle cx="31" cy="9" r="5"/><path d="M23 18 H39 L43 33 H19 Z M22 33 L17 43 M39 33 L44 43 M16 16 L43 40"/>'
+		"fuel": return '<path d="M11 42 V8 H35 V42 M8 42 H40 M15 12 H31 V24 H15 Z M35 28 H44 V38 Q55 45 55 34 V18 L47 10 M50 13 V23 H55"/>'
+		"temp": return '<path d="M28 9 A4 4 0 0 1 36 9 V27 A9 9 0 1 1 28 27 Z M36 12 H43 M36 20 H43 M4 43 Q11 35 18 43 T32 43 T46 43 T60 43"/>'
+		"check": return '<path d="M7 21 H15 V13 H39 L45 20 H54 V15 H60 V36 H54 L49 41 H19 L12 33 H7 Z M23 13 V7 H36 M3 22 V34"/>'
+		"airbag": return '<circle cx="19" cy="10" r="5"/><circle cx="45" cy="22" r="10"/><path d="M13 20 L19 31 H32 L35 42 M10 17 V36 H26"/>'
+	return ""
+
 func build_interior() -> void:
 	# Soft sculpted top, broad horizontal trim, raised infotainment screen.
-	ellipsoid(Vector3(1.51, 0.25, 0.53), Vector3(0, 0.91, -0.79), leather)
-	box(Vector3(1.43, 0.19, 0.15), Vector3(0, 0.79, -0.67), plastic)
-	tube(Vector3(-0.71, 0.858, -0.562), Vector3(0.70, 0.858, -0.562), 0.009, silver)
+	build_dash_shell()
+	tube(Vector3(-0.65, 0.844, -0.562), Vector3(0.65, 0.844, -0.562), 0.004, silver)
 	var cluster := ellipsoid(Vector3(0.55, 0.27, 0.20), Vector3(-0.36, 1.005, -0.75), black)
 	cluster.name = "InstrumentBinnacle"
-	gauge(Vector3(-0.482, 1.006, -0.634), "RPM", 8)
-	gauge(Vector3(-0.258, 1.006, -0.634), "km/h", 8)
-	dash_text = label("P\n0 km/h", Vector3(-0.368, 1.005, -0.624), 30, 0.00085, Color("a8d4ff"))
-	warning_text = label("", Vector3(-0.368, 0.960, -0.624), 18, 0.00050, Color("ffad53"))
-	arrow_left = label("◀", Vector3(-0.422, 1.082, -0.625), 28, 0.0007)
-	arrow_right = label("▶", Vector3(-0.314, 1.082, -0.625), 28, 0.0007)
-	ellipsoid(Vector3(0.37, 0.235, 0.05), Vector3(0.13, 1.015, -0.66), black)
-	box(Vector3(0.293, 0.166, 0.018), Vector3(0.13, 1.022, -0.625), material(Color("101c2d"), 0.1, 0.35))
+	rounded_panel(Vector2(0.54,0.233), 0.055, 0.016, Vector3(-0.36,1.012,-0.548), black)
+	gauge(Vector3(-0.482, 1.006, -0.525), "RPM", 8)
+	gauge(Vector3(-0.258, 1.006, -0.525), "km/h", 8)
+	dash_text = label("P\n0 km/h", Vector3(-0.368, 1.005, -0.510), 30, 0.00085, Color("a8d4ff"))
+	warning_text = label("", Vector3(-0.368, 0.962, -0.510), 17, 0.00050, Color("a8d4ff"))
+	build_telltales()
+	arrow_left = label("◀", Vector3(-0.422, 1.082, -0.515), 28, 0.0007)
+	arrow_right = label("▶", Vector3(-0.314, 1.082, -0.515), 28, 0.0007)
+	rounded_panel(Vector2(0.33,0.197), 0.016, 0.038, Vector3(0.13,1.015,-0.651), black)
+	box(Vector3(0.293, 0.166, 0.018), Vector3(0.13, 1.022, -0.515), material(Color("101c2d"), 0.1, 0.35))
 	label("12:00", Vector3(0.13, 1.05, -0.612), 38, 0.0010, Color("a4caff"))
 	label("RADIO     MEDIA     SETUP", Vector3(0.13, 0.988, -0.612), 18, 0.0006)
 	for x in [-0.049, 0.309]:
 		knob(Vector3(x, 0.935, -0.613), 0.018)
-	for x in [-0.69, -0.02, 0.26, 0.67]:
+	for x in [-0.635, -0.02, 0.26, 0.635]:
 		vent(Vector3(x, 0.873, -0.576), 0.12)
 	box(Vector3(0.042, 0.036, 0.02), Vector3(0.12, 0.874, -0.572), black)
 	label("△", Vector3(0.12, 0.874, -0.559), 28, 0.0010, Color("ed4e4c"))
-	ellipsoid(Vector3(0.34, 0.19, 0.16), Vector3(0.12, 0.73, -0.59), plastic)
+	box(Vector3(0.335, 0.186, 0.095), Vector3(0.12, 0.73, -0.557), plastic)
 	for x in [0.006, 0.235]:
 		knob(Vector3(x, 0.75, -0.506), 0.030)
 	label("21.0\nAUTO   A/C", Vector3(0.12, 0.755, -0.501), 24, 0.0008, Color("b1dfff"))
@@ -314,7 +411,7 @@ func gauge(pos: Vector3, caption: String, divisions: int) -> void:
 
 func build_steering() -> void:
 	var shaft := Node3D.new()
-	shaft.position = Vector3(-0.37, 0.905, -0.365)
+	shaft.position = Vector3(-0.37, 0.845, -0.365)
 	shaft.rotation_degrees.x = -15.0
 	add_child(shaft)
 	car.steering_wheel = Node3D.new()
@@ -384,11 +481,16 @@ func _process(_delta: float) -> void:
 	if car == null or needles.size() < 2:
 		return
 	var kmh: float = absf(car.speed) * 3.6
-	var rpm: float = (0.85 + Input.get_action_strength("accelerate") * 2.0 + kmh * 0.025) if car.engine_on else 0.0
+	var rpm: float = car.rpm / 1000.0
 	needles[0].rotation.z = deg_to_rad(130.0 - clampf(rpm / 8.0,0,1)*260.0)
 	needles[1].rotation.z = deg_to_rad(130.0 - clampf(kmh / 240.0,0,1)*260.0)
 	dash_text.text = "%s\n%d km/h" % [car.gear, roundi(kmh)]
-	warning_text.text = "%s %s\n%s" % ["(P)" if car.handbrake_on else "", "BELT" if not car.seat_belt_on else "", "DRL" if car.drl_on else ""]
+	dash_text.visible = car.ignition_on
+	warning_text.visible = car.ignition_on
+	warning_text.text = "%d L   %d°C" % [roundi(car.fuel_liters), roundi(car.coolant_c)]
+	var states: Dictionary = car.dashboard_states()
+	for key in telltales:
+		telltales[key].visible = states.get(key, false)
 	arrow_left.modulate = Color("49fa76") if car.blink_visible and (car.left_signal or car.hazards_on) else Color("14251a")
 	arrow_right.modulate = Color("49fa76") if car.blink_visible and (car.right_signal or car.hazards_on) else Color("14251a")
 	selector.rotation.x = deg_to_rad(float(["P","R","N","D"].find(car.gear)) * 8.0 - 12.0)
