@@ -19,7 +19,11 @@ left_indicator={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode"
 right_indicator={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":88)]}
 hazard={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":72)]}
 reset_car={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":82)]}
+gear_p={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":49)]}
+gear_r={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":50)]}
+gear_n={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":51)]}
+gear_d={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":52)]}
+toggle_camera={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":67)]}
 
 [rendering]
 renderer/rendering_method="gl_compatibility"
-
