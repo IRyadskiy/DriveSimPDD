@@ -184,111 +184,13 @@ func _update_lights(delta: float) -> void:
 	for lamp in reverse_lights: lamp.visible = engine_on and gear == "R"
 
 func _build_car() -> void:
-	var body_mat := _material(Color("d9dde3"), 0.22, 0.55)
-	var lamp_mat := _emissive(Color("c7eeff"))
-	var turn_mat := _emissive(Color("ff7b00"))
-	_add_box(Vector3(WIDTH, 0.54, LENGTH), Vector3(0, 0.62, 0), body_mat)
-	_add_box(Vector3(1.42, 0.06, 1.28), Vector3(0, 1.50, 0.46), body_mat)
-	_add_box(Vector3(1.62, 0.14, 1.05), Vector3(0, 0.96, -1.55), body_mat)
-	_add_box(Vector3(1.58, 0.16, 0.72), Vector3(0, 0.96, 1.74), body_mat)
-	_build_cockpit()
-	for x in [-0.82, 0.82]:
-		for z in [-WHEEL_BASE * 0.5, WHEEL_BASE * 0.5]: _add_wheel(Vector3(x, 0.42, z))
-	for x in [-0.57, 0.57]: front_lights.append(_add_box(Vector3(0.38, 0.12, 0.05), Vector3(x, 0.75, -2.225), lamp_mat))
-	left_lights.append(_add_box(Vector3(0.16, 0.10, 0.055), Vector3(-0.75, 0.72, -2.23), turn_mat))
-	right_lights.append(_add_box(Vector3(0.16, 0.10, 0.055), Vector3(0.75, 0.72, -2.23), turn_mat))
-	for x in [-0.70, 0.70]:
-		var lamps: Array[MeshInstance3D] = left_lights if x < 0.0 else right_lights
-		lamps.append(_add_box(Vector3(0.13, 0.10, 0.055), Vector3(x, 0.72, 2.23), turn_mat))
-		lamps.append(_add_box(Vector3(0.04, 0.055, 0.13), Vector3(signf(x) * 0.87, 0.83, -0.65), turn_mat))
-		brake_lights.append(_add_box(Vector3(0.22, 0.12, 0.055), Vector3(x * 0.7, 0.73, 2.23), _emissive(Color("ff2010"))))
-		reverse_lights.append(_add_box(Vector3(0.10, 0.08, 0.055), Vector3(x * 0.4, 0.73, 2.23), lamp_mat))
+	var model = preload("res://scripts/solaris_model.gd").new()
+	model.name = "Solaris2021Model"
+	add_child(model)
+	model.build(self)
 	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new(); shape.size = Vector3(WIDTH, HEIGHT, LENGTH)
-	collision.shape = shape; collision.position.y = HEIGHT * 0.5; add_child(collision)
-
-func _build_cockpit() -> void:
-	var dark := _material(Color("171b20"), 0.02, 0.72)
-	var trim := _material(Color("2b3036"), 0.03, 0.58)
-	var seat_mat := _material(Color("242a31"), 0.0, 0.92)
-	# Низкая панель оставляет открытым лобовое стекло и линию дороги.
-	_add_box(Vector3(1.48, 0.14, 0.48), Vector3(0, 0.83, -0.72), dark)
-	_add_box_rotated(Vector3(1.46, 0.08, 0.34), Vector3(0, 0.91, -0.68), Vector3(-8, 0, 0), trim)
-	# Лобовые стойки и верхняя кромка крыши задают настоящий проём стекла.
-	_add_box_rotated(Vector3(0.075, 0.92, 0.09), Vector3(-0.76, 1.19, -0.82), Vector3(-28, 0, -5), dark)
-	_add_box_rotated(Vector3(0.075, 0.92, 0.09), Vector3(0.76, 1.19, -0.82), Vector3(-28, 0, 5), dark)
-	_add_box(Vector3(1.40, 0.08, 0.10), Vector3(0, 1.50, -0.20), dark)
-	# Центральная консоль, тоннель и приборный щиток.
-	_add_box(Vector3(0.30, 0.38, 0.34), Vector3(0.12, 0.69, -0.59), trim)
-	_add_box(Vector3(0.24, 0.13, 0.72), Vector3(0.0, 0.52, 0.05), trim)
-	_add_box(Vector3(0.50, 0.16, 0.12), Vector3(-0.39, 0.96, -0.72), dark)
-	_add_instrument(Vector3(-0.50, 0.96, -0.648))
-	_add_instrument(Vector3(-0.29, 0.96, -0.648))
-	_add_box(Vector3(0.52, 0.12, 0.62), Vector3(-0.39, 0.54, 0.33), seat_mat)
-	_add_box(Vector3(0.52, 0.12, 0.62), Vector3(0.39, 0.54, 0.33), seat_mat)
-	_add_box(Vector3(0.52, 0.72, 0.12), Vector3(-0.39, 0.88, 0.60), seat_mat)
-	_add_box(Vector3(0.52, 0.72, 0.12), Vector3(0.39, 0.88, 0.60), seat_mat)
-	# Tilt is on the parent; wheel, hub and spokes rotate on one local shaft.
-	var shaft := Node3D.new()
-	shaft.position = Vector3(-0.40, 0.98, -0.39)
-	shaft.rotation_degrees.x = -12.0
-	add_child(shaft)
-	steering_wheel = Node3D.new()
-	shaft.add_child(steering_wheel)
-	var rim := MeshInstance3D.new()
-	var wheel_mesh := TorusMesh.new()
-	wheel_mesh.inner_radius = 0.158
-	wheel_mesh.outer_radius = 0.188
-	wheel_mesh.rings = 48
-	wheel_mesh.ring_segments = 12
-	wheel_mesh.material = dark
-	rim.mesh = wheel_mesh
-	rim.rotation_degrees.x = 90.0
-	steering_wheel.add_child(rim)
-	for spec in [Vector3(0.29, 0.035, 0.035), Vector3(0.035, 0.16, 0.035), Vector3(0.105, 0.085, 0.06)]:
-		var part := MeshInstance3D.new()
-		var mesh := BoxMesh.new()
-		mesh.size = spec
-		mesh.material = trim
-		part.mesh = mesh
-		if spec.y > 0.1:
-			part.position.y = -0.075
-		steering_wheel.add_child(part)
-
-func _add_instrument(pos: Vector3) -> void:
-	var item := MeshInstance3D.new()
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.085; mesh.bottom_radius = 0.085; mesh.height = 0.018; mesh.radial_segments = 32
-	mesh.material = _emissive(Color("8fd4ff"))
-	item.mesh = mesh; item.position = pos; item.rotation_degrees.x = 90.0; add_child(item)
-
-func _add_box(size: Vector3, pos: Vector3, material: Material) -> MeshInstance3D:
-	var item := MeshInstance3D.new(); var mesh := BoxMesh.new()
-	mesh.size = size; mesh.material = material; item.mesh = mesh; item.position = pos; add_child(item)
-	return item
-
-func _add_box_rotated(size: Vector3, pos: Vector3, rotation: Vector3, material: Material) -> MeshInstance3D:
-	var item := _add_box(size, pos, material)
-	item.rotation_degrees = rotation
-	return item
-
-func _add_wheel(pos: Vector3) -> void:
-	var item := MeshInstance3D.new(); var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.31; mesh.bottom_radius = 0.31; mesh.height = 0.18; mesh.radial_segments = 24
-	mesh.material = _material(Color("17191c"), 0.05, 0.85)
-	item.mesh = mesh
-	item.rotation_degrees.z = 90.0
-	var pivot := Node3D.new()
-	pivot.position = pos
-	add_child(pivot)
-	pivot.add_child(item)
-	if pos.z < 0.0:
-		front_wheel_pivots.append(pivot)
-
-func _material(color: Color, metallic: float, roughness: float) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new(); mat.albedo_color = color; mat.metallic = metallic; mat.roughness = roughness
-	return mat
-
-func _emissive(color: Color) -> StandardMaterial3D:
-	var mat := _material(color, 0.0, 0.15); mat.emission_enabled = true; mat.emission = color; mat.emission_energy_multiplier = 4.0
-	return mat
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(WIDTH, HEIGHT, LENGTH)
+	collision.shape = shape
+	collision.position.y = HEIGHT * 0.5
+	add_child(collision)
