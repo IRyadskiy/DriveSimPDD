@@ -118,8 +118,21 @@ func _build_car() -> void:
 
 func _build_cockpit(body_mat: Material) -> void:
 	var dark := _material(Color("171b20"), 0.02, 0.72)
+	var trim := _material(Color("2b3036"), 0.03, 0.58)
 	var seat_mat := _material(Color("242a31"), 0.0, 0.92)
-	_add_box(Vector3(1.48, 0.22, 0.55), Vector3(0, 0.98, -0.68), dark)
+	# Низкая панель оставляет открытым лобовое стекло и линию дороги.
+	_add_box(Vector3(1.48, 0.14, 0.48), Vector3(0, 0.83, -0.72), dark)
+	_add_box_rotated(Vector3(1.46, 0.08, 0.34), Vector3(0, 0.91, -0.68), Vector3(-8, 0, 0), trim)
+	# Лобовые стойки и верхняя кромка крыши задают настоящий проём стекла.
+	_add_box_rotated(Vector3(0.075, 0.92, 0.09), Vector3(-0.70, 1.20, -0.38), Vector3(18, 0, -8), dark)
+	_add_box_rotated(Vector3(0.075, 0.92, 0.09), Vector3(0.70, 1.20, -0.38), Vector3(18, 0, 8), dark)
+	_add_box(Vector3(1.40, 0.08, 0.10), Vector3(0, 1.59, -0.23), dark)
+	# Центральная консоль, тоннель и приборный щиток.
+	_add_box(Vector3(0.30, 0.38, 0.34), Vector3(0.12, 0.69, -0.59), trim)
+	_add_box(Vector3(0.24, 0.13, 0.72), Vector3(0.0, 0.52, 0.05), trim)
+	_add_box(Vector3(0.50, 0.16, 0.12), Vector3(-0.39, 0.96, -0.72), dark)
+	_add_instrument(Vector3(-0.50, 0.96, -0.79))
+	_add_instrument(Vector3(-0.29, 0.96, -0.79))
 	_add_box(Vector3(0.52, 0.12, 0.62), Vector3(-0.39, 0.54, 0.33), seat_mat)
 	_add_box(Vector3(0.52, 0.12, 0.62), Vector3(0.39, 0.54, 0.33), seat_mat)
 	_add_box(Vector3(0.52, 0.72, 0.12), Vector3(-0.39, 0.88, 0.60), seat_mat)
@@ -132,14 +145,26 @@ func _build_cockpit(body_mat: Material) -> void:
 	wheel_mesh.material = dark
 	steering_wheel = MeshInstance3D.new()
 	steering_wheel.mesh = wheel_mesh
-	steering_wheel.position = Vector3(-0.40, 1.02, -0.58)
-	steering_wheel.rotation_degrees.x = 90.0
+	steering_wheel.position = Vector3(-0.40, 0.98, -0.48)
+	steering_wheel.rotation_degrees.x = 78.0
 	add_child(steering_wheel)
-	_add_box(Vector3(0.03, 0.03, 0.34), Vector3(-0.40, 1.02, -0.58), dark)
+	_add_box_rotated(Vector3(0.035, 0.035, 0.28), Vector3(-0.40, 0.98, -0.53), Vector3(12, 0, 0), dark)
+
+func _add_instrument(pos: Vector3) -> void:
+	var item := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 0.085; mesh.bottom_radius = 0.085; mesh.height = 0.018; mesh.radial_segments = 32
+	mesh.material = _emissive(Color("8fd4ff"))
+	item.mesh = mesh; item.position = pos; item.rotation_degrees.x = 90.0; add_child(item)
 
 func _add_box(size: Vector3, pos: Vector3, material: Material) -> MeshInstance3D:
 	var item := MeshInstance3D.new(); var mesh := BoxMesh.new()
 	mesh.size = size; mesh.material = material; item.mesh = mesh; item.position = pos; add_child(item)
+	return item
+
+func _add_box_rotated(size: Vector3, pos: Vector3, rotation: Vector3, material: Material) -> MeshInstance3D:
+	var item := _add_box(size, pos, material)
+	item.rotation_degrees = rotation
 	return item
 
 func _add_wheel(pos: Vector3) -> void:
