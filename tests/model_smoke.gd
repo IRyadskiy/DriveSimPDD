@@ -14,6 +14,7 @@ func check_model() -> void:
 	assert(model.mirrors.size() == 3)
 	assert(scene.mirror_cameras.size() == 3)
 	assert(model.needles.size() == 2)
+	assert(model.telltales.size() == 16)
 	assert(car.front_wheel_pivots.size() == 2)
 	# The side of the car must be inside each side-mirror frustum.
 	for i in 2:
@@ -25,6 +26,7 @@ func check_model() -> void:
 	var eye: Vector3 = scene.camera.global_position
 	assert(not blocked(model, eye, eye + car.global_basis * Vector3(0, 0, -5)), "Forward view blocked by body")
 	car.engine_on = true
+	car.ignition_on = true
 	car.handbrake_on = false
 	car.gear = "D"
 	for i in 70:
@@ -43,6 +45,52 @@ func check_model() -> void:
 	assert(model.arrow_right.modulate.g < 0.3)
 	car.reset_vehicle()
 	assert(car.gear == "P")
+	car.ignition_on = true
+	car.lamp_test_left = 2.0
+	assert(car.dashboard_states()["abs"])
+	car._update_systems(2.1)
+	assert(not car.dashboard_states()["abs"])
+	assert(car.dashboard_states()["oil"] and car.dashboard_states()["battery"])
+	car.engine_on = true
+	car.seat_belt_on = true
+	car.handbrake_on = false
+	assert(not car.dashboard_states()["oil"] and not car.dashboard_states()["belt"])
+	car.light_mode = 2
+	car._update_lights(0.01)
+	assert(car.dashboard_states()["low"] and car.headlamp_beams[0].visible)
+	car.light_mode = 3
+	car._update_lights(0.01)
+	assert(car.dashboard_states()["high"] and not car.dashboard_states()["low"])
+	assert(car.headlamp_beams[0].spot_range == 70.0)
+	car.fog_front = true
+	car.fog_rear = true
+	car._update_lights(0.01)
+	assert(car.fog_meshes[0].visible and car.fog_meshes[2].visible)
+	car.fuel_liters = 4.0
+	car.coolant_c = 115.0
+	assert(car.dashboard_states()["fuel"] and car.dashboard_states()["temp"])
+	car.coolant_c = 90.0
+	car.gear = "D"
+	car.speed = 5.0
+	Input.action_press("accelerate")
+	Input.action_press("brake_reverse")
+	for i in 45:
+		await physics_frame
+	assert(absf(car.speed) < 0.1, "Brake must override throttle")
+	Input.action_release("accelerate")
+	Input.action_release("brake_reverse")
+	car.reset_vehicle()
+	scene._static_box(Vector3(8, 2, 0.3), car.global_position + Vector3(0, 1, -3.3), Color.GRAY)
+	car.ignition_on = true
+	car.engine_on = true
+	car.handbrake_on = false
+	car.gear = "D"
+	Input.action_press("accelerate")
+	for i in 100:
+		await physics_frame
+	assert(absf(car.speed) < 0.2, "Collision must stop reported forward speed")
+	Input.action_release("accelerate")
+	car.reset_vehicle()
 	print("SOLARIS MODEL SMOKE PASS")
 	scene.queue_free()
 	await process_frame
