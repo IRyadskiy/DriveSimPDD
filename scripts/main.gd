@@ -9,6 +9,7 @@ var mirror_cameras: Array[Camera3D] = []
 var task_label: Label
 var status_label: Label
 var speed_label: Label
+var gear_label: Label
 var tasks := ["Заведите двигатель — E", "Пристегните ремень — B", "Снимите ручник — Space", "Включите ДХО — L", "Переведите АКПП в D — клавиша 4", "Начните движение — W", "Покиньте учебную парковку"]
 var task_done := [false, false, false, false, false, false, false]
 
@@ -37,7 +38,7 @@ func _process(_delta: float) -> void:
 		camera.global_position = camera.global_position.lerp(desired, 0.075)
 		camera.look_at(car.global_position + Vector3.UP * 0.9)
 	else:
-		camera.global_transform = car.global_transform * Transform3D(Basis.from_euler(Vector3(look_pitch, look_yaw, 0)), Vector3(-0.38, 1.25, 0.28))
+		camera.global_transform = car.global_transform * Transform3D(Basis.from_euler(Vector3(look_pitch, look_yaw, 0)), Vector3(-0.38, 1.31, 0.32))
 	_update_mirrors()
 	_update_hud()
 
@@ -59,15 +60,17 @@ func _build_world() -> void:
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new(); add_child(layer)
-	var panel := ColorRect.new(); panel.color = Color(0.035, 0.055, 0.085, 0.84); panel.position = Vector2(18, 500); panel.size = Vector2(500, 202); layer.add_child(panel)
-	_label(layer, Vector2(36, 510), 19, "АВТОШКОЛА • УЧЕБНАЯ ПАРКОВКА")
-	task_label = _label(layer, Vector2(36, 543), 18, ""); task_label.size = Vector2(460, 45); task_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_label = _label(layer, Vector2(36, 590), 15, "")
-	speed_label = _label(layer, Vector2(36, 665), 19, "0 км/ч")
-	_label(layer, Vector2(535, 676), 14, "1/2/3/4 — P/R/N/D  •  C — вид  •  мышь — обзор  •  Esc — освободить мышь")
-	_build_mirror(layer, Vector2(22, 20), Vector2(250, 92), Vector3(-0.75, 1.28, 0.15), Vector3(-0.55, 0, 1))
-	_build_mirror(layer, Vector2(490, 18), Vector2(300, 100), Vector3(0, 1.30, 0.55), Vector3(0, 0, 1))
-	_build_mirror(layer, Vector2(1008, 20), Vector2(250, 92), Vector3(0.75, 1.28, 0.15), Vector3(0.55, 0, 1))
+	var panel := ColorRect.new(); panel.color = Color(0.035, 0.055, 0.085, 0.78); panel.position = Vector2(18, 548); panel.size = Vector2(450, 154); layer.add_child(panel)
+	_label(layer, Vector2(34, 556), 16, "АВТОШКОЛА • УЧЕБНАЯ ПАРКОВКА")
+	task_label = _label(layer, Vector2(34, 584), 16, ""); task_label.size = Vector2(415, 40); task_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label = _label(layer, Vector2(34, 625), 13, "")
+	speed_label = _label(layer, Vector2(575, 650), 28, "0 км/ч")
+	gear_label = _label(layer, Vector2(735, 650), 28, "D")
+	_label(layer, Vector2(850, 681), 12, "1/2/3/4 — P/R/N/D  •  C — вид  •  мышь — обзор")
+	# Центральное зеркало сверху; боковые — около краёв дверей.
+	_build_mirror(layer, Vector2(14, 235), Vector2(205, 92), Vector3(-0.80, 1.22, -0.18), Vector3(-0.50, -0.03, 1))
+	_build_mirror(layer, Vector2(500, 18), Vector2(280, 82), Vector3(0, 1.38, 0.45), Vector3(0, -0.02, 1))
+	_build_mirror(layer, Vector2(1061, 235), Vector2(205, 92), Vector3(0.80, 1.22, -0.18), Vector3(0.50, -0.03, 1))
 
 func _update_hud() -> void:
 	var current := [car.engine_on, car.seat_belt_on, not car.handbrake_on, car.drl_on, car.gear == "D", abs(car.speed) > 0.7, car.global_position.z < -11]
@@ -76,6 +79,7 @@ func _update_hud() -> void:
 	var next := task_done.find(false)
 	task_label.text = "Задание выполнено!" if next == -1 else "Шаг %d/7: %s" % [next + 1, tasks[next]]
 	status_label.text = "АКПП: %s   Двигатель: %s   Ремень: %s\nРучник: %s   ДХО: %s   Сигналы: %s" % [car.gear, _on(car.engine_on), _on(car.seat_belt_on), _on(car.handbrake_on), _on(car.drl_on), _signals()]
+	gear_label.text = "АКПП  %s" % car.gear
 
 func _build_mirror(layer: CanvasLayer, pos: Vector2, size: Vector2, local_pos: Vector3, local_direction: Vector3) -> void:
 	var viewport := SubViewport.new()
