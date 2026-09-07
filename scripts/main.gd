@@ -6,6 +6,7 @@ var task_label: Label
 var status_label: Label
 var speed_label: Label
 var tasks := ["Заведите двигатель — E", "Пристегните ремень — B", "Снимите ручник — Space", "Включите ДХО — L", "Начните движение — W", "Покиньте учебную парковку"]
+var task_done := [false, false, false, false, false, false]
 
 func _ready() -> void:
 	_build_world()
@@ -46,8 +47,10 @@ func _build_hud() -> void:
 	_label(layer, Vector2(480, 28), 16, "W/S — газ/тормоз  •  A/D — руль  •  Z/X — поворотники  •  H — аварийка  •  R — сброс")
 
 func _update_hud() -> void:
-	var done := [car.engine_on, car.seat_belt_on, not car.handbrake_on, car.drl_on, abs(car.speed) > 0.7, car.global_position.z < -11]
-	var next := done.find(false)
+	var current := [car.engine_on, car.seat_belt_on, not car.handbrake_on, car.drl_on, abs(car.speed) > 0.7, car.global_position.z < -11]
+	for i in task_done.size():
+		task_done[i] = task_done[i] or current[i]
+	var next := task_done.find(false)
 	task_label.text = "Задание выполнено!" if next == -1 else "Шаг %d/6: %s" % [next + 1, tasks[next]]
 	status_label.text = "Двигатель: %s   Ремень: %s\nРучник: %s   ДХО: %s\nСигналы: %s" % [_on(car.engine_on), _on(car.seat_belt_on), _on(car.handbrake_on), _on(car.drl_on), _signals()]
 
