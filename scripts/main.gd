@@ -4,7 +4,7 @@ var car: TrainingCar
 var camera: Camera3D
 var exterior_camera := false
 var look_yaw := 0.0
-var look_pitch := 0.0
+var look_pitch := -0.08
 var mirror_cameras: Array[Camera3D] = []
 var task_label: Label
 var status_label: Label
@@ -30,7 +30,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("reset_car"):
 		task_done.fill(false)
 		look_yaw = 0.0
-		look_pitch = 0.0
+		look_pitch = -0.08
 	if event.is_action_pressed("toggle_camera"):
 		exterior_camera = not exterior_camera
 	if event.is_action_pressed("ui_cancel"):
@@ -44,7 +44,7 @@ func _process(_delta: float) -> void:
 		camera.global_position = camera.global_position.lerp(desired, 0.075)
 		camera.look_at(car.global_position + Vector3.UP * 0.9)
 	else:
-		camera.global_transform = car.global_transform * Transform3D(Basis.from_euler(Vector3(look_pitch, look_yaw, 0)), Vector3(-0.38, 1.23, 0.24))
+		camera.global_transform = car.global_transform * Transform3D(Basis.from_euler(Vector3(look_pitch, look_yaw, 0)), Vector3(-0.37, 1.22, 0.20))
 	_update_mirrors()
 	_update_hud()
 
@@ -66,20 +66,24 @@ func _build_world() -> void:
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new(); add_child(layer)
-	var panel := ColorRect.new(); panel.color = Color(0.035, 0.055, 0.085, 0.78); panel.position = Vector2(18, 548); panel.size = Vector2(450, 154); layer.add_child(panel)
-	_label(layer, Vector2(34, 556), 16, "АВТОШКОЛА • УЧЕБНАЯ ПАРКОВКА")
-	task_label = _label(layer, Vector2(34, 584), 16, ""); task_label.size = Vector2(415, 40); task_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var panel := ColorRect.new(); panel.color = Color(0.035, 0.055, 0.085, 0.72); panel.position = Vector2(18, 18); panel.size = Vector2(420, 86); layer.add_child(panel)
+	_label(layer, Vector2(34, 25), 14, "АВТОШКОЛА • SOLARIS")
+	task_label = _label(layer, Vector2(34, 52), 16, ""); task_label.size = Vector2(390, 44); task_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label = _label(layer, Vector2(34, 625), 13, "")
 	speed_label = _label(layer, Vector2(575, 650), 28, "0 км/ч")
 	gear_label = _label(layer, Vector2(735, 650), 28, "D")
+	status_label.visible = false
+	speed_label.visible = false
+	gear_label.visible = false
 	_label(layer, Vector2(850, 681), 12, "1/2/3/4 — P/R/N/D  •  C — вид  •  мышь — обзор")
 	left_arrow = _label(layer, Vector2(550, 601), 34, "◀")
 	right_arrow = _label(layer, Vector2(740, 601), 34, "▶")
-	_label(layer, Vector2(500, 570), 14, "Z — левый    X — правый    H — аварийка")
-	# Центральное зеркало сверху; боковые — около краёв дверей.
-	_build_mirror(layer, Vector2(14, 235), Vector2(205, 92), Vector3(-0.80, 1.22, -0.18), Vector3(-0.50, -0.03, 1))
-	_build_mirror(layer, Vector2(500, 18), Vector2(280, 82), Vector3(0, 1.38, 0.45), Vector3(0, -0.02, 1))
-	_build_mirror(layer, Vector2(1061, 235), Vector2(205, 92), Vector3(0.80, 1.22, -0.18), Vector3(0.50, -0.03, 1))
+	left_arrow.visible = false
+	right_arrow.visible = false
+	_label(layer, Vector2(18, 681), 12, "E — двигатель • B — ремень • Space — ручник • L — ДХО • Z/X — поворотники • H — аварийка")
+	var model = car.get_node("Solaris2021Model")
+	for mount in model.mirrors:
+		_build_mirror_surface(mount)
 
 func _update_hud() -> void:
 	left_arrow.modulate = Color("57ff78") if car.blink_visible and (car.left_signal or car.hazards_on) else Color("344039")
@@ -92,20 +96,36 @@ func _update_hud() -> void:
 	status_label.text = "АКПП: %s   Двигатель: %s   Ремень: %s\nРучник: %s   ДХО: %s   Сигналы: %s" % [car.gear, _on(car.engine_on), _on(car.seat_belt_on), _on(car.handbrake_on), _on(car.drl_on), _signals()]
 	gear_label.text = "АКПП  %s" % car.gear
 
-func _build_mirror(layer: CanvasLayer, pos: Vector2, size: Vector2, local_pos: Vector3, local_direction: Vector3) -> void:
+func _build_mirror_surface(mount: Node3D) -> void:
 	var viewport := SubViewport.new()
-	viewport.size = Vector2i(int(size.x), int(size.y))
+	var mirror_size: Vector2 = mount.get_meta("size")
+	viewport.size = Vector2i(512, roundi(512.0 * mirror_size.y / mirror_size.x))
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	viewport.world_3d = get_viewport().world_3d
 	add_child(viewport)
 	var mirror_camera := Camera3D.new()
-	mirror_camera.fov = 58
-	mirror_camera.set_meta("local_pos", local_pos)
-	mirror_camera.set_meta("local_direction", local_direction.normalized())
+	mirror_camera.fov = 52
+	mirror_camera.keep_aspect = Camera3D.KEEP_WIDTH
+	mirror_camera.near = 0.03
+	# Layer 2 contains only mirror surfaces. Exclude to avoid feedback.
+	mirror_camera.cull_mask = 1
+	mirror_camera.set_meta("local_pos", mount.get_meta("camera_pos"))
+	mirror_camera.set_meta("local_direction", mount.get_meta("direction").normalized())
 	viewport.add_child(mirror_camera)
 	mirror_cameras.append(mirror_camera)
-	var frame := ColorRect.new(); frame.color = Color("151a20"); frame.position = pos - Vector2(4, 4); frame.size = size + Vector2(8, 8); layer.add_child(frame)
-	var view := TextureRect.new(); view.position = pos; view.size = size; view.texture = viewport.get_texture(); view.flip_h = true; view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; layer.add_child(view)
+	var shader := Shader.new()
+	shader.code = "shader_type spatial; render_mode unshaded, cull_disabled; uniform sampler2D mirror_image : source_color; void fragment() { ALBEDO = texture(mirror_image, vec2(1.0-UV.x, UV.y)).rgb; }"
+	var mat := ShaderMaterial.new()
+	mat.shader = shader
+	mat.set_shader_parameter("mirror_image", viewport.get_texture())
+	var mesh := QuadMesh.new()
+	mesh.size = mount.get_meta("size")
+	mesh.material = mat
+	var surface := MeshInstance3D.new()
+	surface.mesh = mesh
+	surface.layers = 2
+	surface.position.z = 0.035
+	mount.add_child(surface)
 
 func _update_mirrors() -> void:
 	for mirror_camera in mirror_cameras:
